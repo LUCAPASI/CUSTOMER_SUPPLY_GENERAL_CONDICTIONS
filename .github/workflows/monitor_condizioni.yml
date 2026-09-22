@@ -2,39 +2,32 @@ name: Monitoraggio Condizioni Generali di Fornitura
 
 on:
   schedule:
-    - cron: '0 8 1-7 * 1'
-  workflow_dispatch:
+    # Esegue il primo martedì del mese ogni 2 mesi (Feb, Apr, Giu, Ago, Ott, Dic) alle 08:00 UTC
+    - cron: '0 8 1-7 2,4,6,8,10,12 2'
+  workflow_dispatch: # Permette anche l'esecuzione manuale in qualsiasi momento
 
 jobs:
-  run-monitor:
+  check-links:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Configura Python
+      - name: Configura Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 3. Installa Dipendenze
+      - name: Installa Dipendenze
         run: |
           python -m pip install --upgrade pip
-          pip install pandas openpyxl requests beautifulsoup4 google-genai pypdf
+          pip install pandas openpyxl requests
 
-      - name: 4. Esegui Agente AI
+      - name: Esegui Controllo Link CGF
         env:
-          GEMINI_APP_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_MITTENTE: ${{ secrets.EMAIL_MITTENTE }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
         run: |
           python agent_cgf.py
-
-      - name: 5. Salvataggio modifiche Excel
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add COND_CLIENTI.xlsx
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Aggiornate Condizioni" && git push)
