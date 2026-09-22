@@ -2,40 +2,41 @@ name: Monitoraggio Condizioni Generali di Fornitura
 
 on:
   schedule:
-    # Esegue il primo lunedì del mese alle 08:00 UTC
     - cron: '0 8 1-7 * 1'
-  workflow_dispatch: # Permette l'esecuzione manuale dalla scheda Actions su GitHub
+  workflow_dispatch:
 
 jobs:
-  check-agreements:
+  run-monitor:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configura Python
+      - name: 2. Configura Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Installa Dipendenze
+      - name: 3. Installa Dipendenze
         run: |
+          echo "=== INSTALLAZIONE DIPENDENZE ==="
           python -m pip install --upgrade pip
           pip install pandas openpyxl requests beautifulsoup4 google-genai pypdf
 
-      - name: Esegui Agente AI di Monitoraggio
+      - name: 4. Esegui Agente AI
         env:
           GEMINI_APP_KEY: ${{ secrets.GEMINI_APP_KEY }}
           EMAIL_MITTENTE: ${{ secrets.EMAIL_MITTENTE }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
         run: |
+          echo "=== AVVIO AGENTE PYTHON ==="
           python agent_cgf.py
 
-      - name: Salva e Fai Commit dei Cambiamenti su Excel
+      - name: 5. Salvataggio modifiche Excel
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add COND_CLIENTI.xlsx
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Aggiornate Condizioni Generali di Fornitura" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Aggiornate Condizioni" && git push)
