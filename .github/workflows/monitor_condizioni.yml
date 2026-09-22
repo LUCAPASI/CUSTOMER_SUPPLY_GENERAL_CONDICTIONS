@@ -31,7 +31,7 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
         run: |
-          python agent_monitor.py
+          python agent_cgf.py
 
       - name: Salva e Fai Commit dei Cambiamenti su Excel
         run: |
