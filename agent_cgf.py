@@ -29,6 +29,17 @@ def check_link_status(url, session):
     except Exception:
         return False
 
+def format_date_eur(val):
+    """Formatta la data nel formato europeo GG/MM/AAAA."""
+    if pd.isna(val) or str(val).strip() == "":
+        return ""
+    val_str = str(val).strip()
+    try:
+        dt = pd.to_datetime(val_str, dayfirst=True)
+        return dt.strftime('%d/%m/%Y')
+    except Exception:
+        return val_str
+
 def send_email_report(results):
     """Invia il report email riassuntivo in formato tabella HTML."""
     if not all([EMAIL_MITTENTE, EMAIL_PASSWORD, EMAIL_DESTINATARIO]):
@@ -54,8 +65,8 @@ def send_email_report(results):
         <thead>
             <tr style="background-color: #2c3e50; color: #ffffff; text-align: left;">
                 <th>CLIENTE</th>
-                <th>REVISIONE EXCEL</th>
-                <th>DATA EXCEL</th>
+                <th>REVISIONE</th>
+                <th>DATA CONDIZIONI</th>
                 <th>LINK VERIFICATO</th>
                 <th>STATO</th>
             </tr>
@@ -107,13 +118,13 @@ def main():
     for index, row in df.iterrows():
         cliente = str(row['CLIENTE']).strip()
         revisione = str(row['REVISIONE']).strip()
-        data_doc = str(row['DATA']).strip()
+        data_doc = format_date_eur(row['DATA'])
         link = str(row['LINK']).strip()
 
         print(f"[+] Verifica link per {cliente}...")
         is_ok = check_link_status(link, session)
 
-        # Se il link NON existe (is_ok == False) -> C'è stato un aggiornamento
+        # Se il link NON esiste (is_ok == False) -> C'è stato un aggiornamento
         aggiornamento_rilevato = not is_ok
 
         results.append({
