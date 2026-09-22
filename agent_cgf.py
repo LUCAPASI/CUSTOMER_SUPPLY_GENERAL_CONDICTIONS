@@ -49,7 +49,7 @@ def extract_text_from_url(url, session, depth=0):
             text = " ".join([page.extract_text() or '' for page in pdf.pages])
             return text, "PDF"
 
-        # Caso 2: Pagina HTML (es. Lamiflex) -> Estrae il testo e analizza link interni
+        # Caso 2: Pagina HTML -> Estrae il testo e analizza link interni
         soup = BeautifulSoup(response.text, 'html.parser')
         main_text = soup.get_text(separator=' ')
 
@@ -70,7 +70,7 @@ def extract_text_from_url(url, session, depth=0):
         return "", str(e)
 
 def analyze_with_gemini(cliente, url, text_content):
-    """Analizza il testo con il modello gemini-2.5-flash."""
+    """Analizza il testo con il modello corretto 'gemini-2.5-flash'."""
     if not client_gemini:
         return "N/A", "N/A", "API Key Gemini non trovata nei Secrets."
 
@@ -89,7 +89,7 @@ def analyze_with_gemini(cliente, url, text_content):
     )
 
     try:
-        # Nome modello corretto
+        # USA IL NOME MODELLO AGGIORNATO E VALIDO
         response = client_gemini.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
