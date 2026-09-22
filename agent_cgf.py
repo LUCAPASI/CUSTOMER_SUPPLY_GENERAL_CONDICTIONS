@@ -11,9 +11,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google import genai
 
-# Variabili di ambiente e Secrets
+# Parametri e Secrets
 EXCEL_FILE = 'COND_CLIENTI.xlsx'
-GEMINI_API_KEY = os.environ.get("GEMINI_APP_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_APP_KEY") or os.environ.get("GEMINI_API_KEY")
 EMAIL_MITTENTE = os.environ.get("EMAIL_MITTENTE")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD")
 EMAIL_DESTINATARIO = os.environ.get("EMAIL_DESTINATARIO")
@@ -22,7 +22,7 @@ EMAIL_DESTINATARIO = os.environ.get("EMAIL_DESTINATARIO")
 client_gemini = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 def get_session():
-    """Crea una sessione HTTP per simulare un browser reale."""
+    """Crea una sessione HTTP simulando un browser reale."""
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -32,7 +32,7 @@ def get_session():
     return session
 
 def extract_text_from_url(url, session, depth=0):
-    """Scarica il contenuto del link (PDF o HTML). Se HTML, esplora anche i link PDF/Condizioni interni."""
+    """Estrae testo da PDF o pagine HTML, seguendo eventuali collegamenti interni a PDF/Condizioni."""
     if depth > 1:
         return "", "Max Depth Reached"
 
@@ -43,25 +43,26 @@ def extract_text_from_url(url, session, depth=0):
 
         content_type = response.headers.get('Content-Type', '').lower()
 
-        # Caso 1: È un file PDF diretto
+        # Caso 1: Documento PDF Diretto
         if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
             pdf = PdfReader(BytesIO(response.content))
             text = " ".join([page.extract_text() or '' for page in pdf.pages])
             return text, "PDF"
 
-        # Caso 2: È una pagina HTML -> analizza testo e cerca collegamenti a PDF/Termini
+        # Caso 2: Pagina HTML
         soup = BeautifulSoup(response.text, 'html.parser')
         main_text = soup.get_text(separator=' ')
 
+        # Cerca eventuali sub-link PDF/Condizioni pertinenti presenti nella pagina
         pdf_texts = []
         for a_tag in soup.find_all('a', href=True):
             href = a_tag['href']
             link_text = a_tag.get_text().strip().lower()
-            if href.lower().endswith('.pdf') or 'condizion' in link_text or 'terms' in link_text or 'fornitur' in link_text or 'purchase' in link_text:
+            if href.lower().endswith('.pdf') or any(kw in link_text for kw in ['condiz', 'term', 'fornitur', 'purchas']):
                 full_url = urljoin(url, href)
                 sub_text, sub_type = extract_text_from_url(full_url, session, depth=depth+1)
                 if sub_text:
-                    pdf_texts.append(f"\n--- CONTENUTO DA LINK INTERNO ({full_url}) ---\n" + sub_text)
+                    pdf_texts.append(f"\n--- TESTO DA LINK INTERNO ({full_url}) ---\n" + sub_text)
 
         combined_text = main_text + "\n" + "\n".join(pdf_texts)
         return combined_text, "HTML"
@@ -70,26 +71,26 @@ def extract_text_from_url(url, session, depth=0):
         return "", str(e)
 
 def analyze_with_gemini(cliente, url, text_content):
-    """Analizza il testo con Gemini (modello aggiornato 'gemini-2.5-flash')."""
+    """Analizza il testo estratto usando il modello gemini-2.5-flash."""
     if not client_gemini:
-        return "N/A", "N/A", "API Gemini non configurata (GEMINI_APP_KEY/GEMINI_API_KEY mancante)"
+        return "N/A", "N/A", "API Key Gemini non trovata nei Secrets."
 
     prompt = (
-        f"Sei un assistente legale/acquisti. Analizza il seguente testo estratto dal sito/documento del cliente '{cliente}' (URL: {url}).\n\n"
+        f"Sei un assistente legale/acquisti. Analizza il seguente testo estratto dal sito/documento per il cliente '{cliente}' (URL: {url}).\n\n"
         f"TESTO ESTRATTO:\n{text_content[:4000]}\n\n"
-        "Compito:\n"
-        "1. Identifica se sono presenti le Condizioni Generali di Fornitura / Acquisto.\n"
-        "2. Estrai il numero o l'indice di Revisione (es. Rev. 1, Rev. C, 0, ecc.). Se non presente o 'NO INDEX', scrivi 'NO INDEX'.\n"
-        "3. Estrai la Data delle condizioni/revisione (es. 27/04/2026, Gennaio 2024, ecc.). Se non presente, scrivi 'Non specificata'.\n"
-        "4. Fornisci un'analisi sintetica in NOTE evidenziando eventuali anomalie.\n\n"
-        "Rispondi ESATTAMENTE con questo formato:\n"
+        "Istruzioni:\n"
+        "1. Verifica la presenza delle Condizioni Generali di Fornitura / Acquisto.\n"
+        "2. Indica l'indice o numero di Revisione trovato (es. Rev. 1, Rev. C, 0). Se assente, rispondi 'NO INDEX'.\n"
+        "3. Estrai la Data delle condizioni o della revisione (es. 27/04/2026, Gennaio 2024). Se assente, rispondi 'Non specificata'.\n"
+        "4. Descrivi in NOTE eventuali discrepanze o anomalie rilevate.\n\n"
+        "Rispondi ESATTAMENTE in questo formato:\n"
         "REVISIONE: <valore>\n"
         "DATA: <valore>\n"
-        "NOTE: <breve nota>"
+        "NOTE: <breve descrizione>"
     )
 
     try:
-        # Usa il modello 'gemini-2.5-flash'
+        # Nome modello aggiornato
         response = client_gemini.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
@@ -109,9 +110,9 @@ def analyze_with_gemini(cliente, url, text_content):
         return "N/A", "N/A", f"Errore analisi Gemini: {str(e)}"
 
 def send_email_table_report(results):
-    """Genera l'email con la tabella di confronto riprodotta dall'Excel."""
+    """Invia il report con la tabella di confronto."""
     if not all([EMAIL_MITTENTE, EMAIL_PASSWORD, EMAIL_DESTINATARIO]):
-        print("[-] Credenziali Email non completamente configurate nei Secrets.")
+        print("[-] Credenziali email non complete. Invio ignorato.")
         return
 
     anomalies_count = sum(1 for r in results if r['anomalia'])
@@ -127,7 +128,7 @@ def send_email_table_report(results):
 
     body = f"""
     <h2>Report Monitoraggio Condizioni Generali di Fornitura</h2>
-    <p>Di seguito la tabella di confronto tra i dati registrati nel file Excel e i riscontri rilevati dall'Agente AI su web/PDF:</p>
+    <p>Di seguito la tabella di confronto tra i dati del file Excel e l'analisi eseguita dall'Agente AI:</p>
 
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px;">
         <thead>
@@ -170,15 +171,15 @@ def send_email_table_report(results):
     msg.attach(MIMEText(body, 'html'))
 
     try:
-        print("[+] Connessione al server SMTP per invio mail...")
+        print("[+] Connessione al server SMTP...")
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(EMAIL_MITTENTE, EMAIL_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"[OK] Email di report inviata con successo a: {EMAIL_DESTINATARIO}")
+        print(f"[OK] Report email inviato con successo a: {EMAIL_DESTINATARIO}")
     except Exception as e:
-        print(f"[-] Errore durante l'invio dell'email SMTP: {str(e)}")
+        print(f"[-] Errore durante l'invio email: {str(e)}")
 
 def process_clienti():
     requests.packages.urllib3.disable_warnings()
@@ -193,7 +194,7 @@ def process_clienti():
         data_attesa = str(row['DATA']).strip()
         link = str(row['LINK']).strip()
 
-        print(f"\n[+] Verifica in corso per: {cliente}")
+        print(f"\n[+] Analisi per cliente: {cliente}")
         content, status = extract_text_from_url(link, session)
 
         if not content:
@@ -205,20 +206,19 @@ def process_clienti():
                 'link': link,
                 'rev_rilevata': 'N/A',
                 'data_rilevata': 'N/A',
-                'note': f"Link non raggiungibile / Errore ({status}). Necessaria verifica del link.",
+                'note': f"Link non raggiungibile ({status}). Verificare l'URL.",
                 'anomalia': True
             })
             continue
 
         rev_found, data_found, note = analyze_with_gemini(cliente, link, content)
 
-        # Flag anomalia se ci sono difformità o errori
         anomalia = False
         if revisione_attesa.upper() != 'NO INDEX':
             if revisione_attesa.lower() not in rev_found.lower() and rev_found.upper() != 'N/A':
                 anomalia = True
 
-        if "errore" in note.lower() or "discrepanza" in note.lower() or "non raggiungibile" in note.lower():
+        if any(w in note.lower() for w in ["errore", "discrepanza", "non raggiungibile", "attenzione"]):
             anomalia = True
 
         results.append({
