@@ -24,14 +24,10 @@ def get_session():
 def check_link_status(url, session):
     """Verifica se il link esiste e restituisce codice HTTP 200."""
     try:
-        # Tenta una richiesta GET leggera
         response = session.get(url, timeout=15, verify=False, stream=True)
-        if response.status_code == 200:
-            return True, f"200 OK (Link Esistente)"
-        else:
-            return False, f"HTTP Error {response.status_code} (Link Rimosso o Modificato)"
-    except Exception as e:
-        return False, f"Errore di Connessione: {str(e)}"
+        return response.status_code == 200
+    except Exception:
+        return False
 
 def send_email_report(results):
     """Invia il report email riassuntivo in formato tabella HTML."""
@@ -52,7 +48,7 @@ def send_email_report(results):
 
     body = f"""
     <h2>Report Monitoraggio Condizioni Generali di Fornitura</h2>
-    <p>Di seguito l'esito della verifica dei link ai documenti di fornitura:</p>
+    <p>Di seguito l'esito della verifica delle condizioni generali di fornitura:</p>
 
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 13px;">
         <thead>
@@ -62,7 +58,6 @@ def send_email_report(results):
                 <th>DATA EXCEL</th>
                 <th>LINK VERIFICATO</th>
                 <th>STATO</th>
-                <th>DETTAGLIO ESITO</th>
             </tr>
         </thead>
         <tbody>
@@ -79,7 +74,6 @@ def send_email_report(results):
             <td>{r['data']}</td>
             <td><a href="{r['link']}" target="_blank">Apri Link Documento</a></td>
             <td><b>{status_label}</b></td>
-            <td>{r['dettaglio']}</td>
         </tr>
         """
 
@@ -117,9 +111,9 @@ def main():
         link = str(row['LINK']).strip()
 
         print(f"[+] Verifica link per {cliente}...")
-        is_ok, dettaglio = check_link_status(link, session)
+        is_ok = check_link_status(link, session)
 
-        # Se il link NON esiste (is_ok == False) -> C'è stato un aggiornamento
+        # Se il link NON existe (is_ok == False) -> C'è stato un aggiornamento
         aggiornamento_rilevato = not is_ok
 
         results.append({
@@ -127,8 +121,7 @@ def main():
             'revisione': revisione,
             'data': data_doc,
             'link': link,
-            'aggiornamento': aggiornamento_rilevato,
-            'dettaglio': dettaglio
+            'aggiornamento': aggiornamento_rilevato
         })
 
     send_email_report(results)
