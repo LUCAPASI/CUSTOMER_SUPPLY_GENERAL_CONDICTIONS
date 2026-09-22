@@ -20,18 +20,16 @@ jobs:
 
       - name: 3. Installa Dipendenze
         run: |
-          echo "=== INSTALLAZIONE DIPENDENZE ==="
           python -m pip install --upgrade pip
           pip install pandas openpyxl requests beautifulsoup4 google-genai pypdf
 
       - name: 4. Esegui Agente AI
         env:
-          GEMINI_APP_KEY: ${{ secrets.GEMINI_APP_KEY }}
+          GEMINI_APP_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_MITTENTE: ${{ secrets.EMAIL_MITTENTE }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
         run: |
-          echo "=== AVVIO AGENTE PYTHON ==="
           python agent_cgf.py
 
       - name: 5. Salvataggio modifiche Excel
