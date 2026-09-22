@@ -32,7 +32,7 @@ def get_session():
     return session
 
 def extract_text_from_url(url, session, depth=0):
-    """Estrae testo da PDF o pagine HTML, seguendo eventuali collegamenti interni a PDF/Condizioni."""
+    """Estrae testo da PDF o pagine HTML, seguendo eventuali collegamenti interni a PDF o sezioni Condizioni."""
     if depth > 1:
         return "", "Max Depth Reached"
 
@@ -43,17 +43,16 @@ def extract_text_from_url(url, session, depth=0):
 
         content_type = response.headers.get('Content-Type', '').lower()
 
-        # Caso 1: Documento PDF Diretto
+        # Caso 1: File PDF Diretto
         if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
             pdf = PdfReader(BytesIO(response.content))
             text = " ".join([page.extract_text() or '' for page in pdf.pages])
             return text, "PDF"
 
-        # Caso 2: Pagina HTML
+        # Caso 2: Pagina HTML (es. Lamiflex) -> Estrae il testo e analizza link interni
         soup = BeautifulSoup(response.text, 'html.parser')
         main_text = soup.get_text(separator=' ')
 
-        # Cerca eventuali sub-link PDF/Condizioni pertinenti presenti nella pagina
         pdf_texts = []
         for a_tag in soup.find_all('a', href=True):
             href = a_tag['href']
@@ -71,7 +70,7 @@ def extract_text_from_url(url, session, depth=0):
         return "", str(e)
 
 def analyze_with_gemini(cliente, url, text_content):
-    """Analizza il testo estratto usando il modello gemini-2.5-flash."""
+    """Analizza il testo con il modello gemini-2.5-flash."""
     if not client_gemini:
         return "N/A", "N/A", "API Key Gemini non trovata nei Secrets."
 
@@ -90,7 +89,7 @@ def analyze_with_gemini(cliente, url, text_content):
     )
 
     try:
-        # Nome modello aggiornato
+        # Nome modello corretto
         response = client_gemini.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
@@ -110,9 +109,9 @@ def analyze_with_gemini(cliente, url, text_content):
         return "N/A", "N/A", f"Errore analisi Gemini: {str(e)}"
 
 def send_email_table_report(results):
-    """Invia il report con la tabella di confronto."""
+    """Invia il report con la tabella HTML."""
     if not all([EMAIL_MITTENTE, EMAIL_PASSWORD, EMAIL_DESTINATARIO]):
-        print("[-] Credenziali email non complete. Invio ignorato.")
+        print("[-] Credenziali email non complete nei Secrets.")
         return
 
     anomalies_count = sum(1 for r in results if r['anomalia'])
