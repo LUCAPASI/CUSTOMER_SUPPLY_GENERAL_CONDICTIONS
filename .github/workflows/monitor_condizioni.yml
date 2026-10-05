@@ -2,15 +2,24 @@ name: Monitoraggio Condizioni Generali di Fornitura
 
 on:
   schedule:
-    # Esegue il primo martedì del mese ogni 2 mesi (Feb, Apr, Giu, Ago, Ott, Dic) alle 08:00 UTC
-    - cron: '0 8 1-7 2,4,6,8,10,12 2'
-  workflow_dispatch: # Permette anche l'esecuzione manuale in qualsiasi momento
+    # Esegue OGNI MARTEDÌ dei mesi Feb, Apr, Giu, Ago, Ott, Dic alle 08:00 UTC
+    - cron: '0 8 * 2,4,6,8,10,12 2'
+  workflow_dispatch: # Permette anche l'esecuzione manuale
 
 jobs:
   check-links:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Verifica che sia il PRIMO martedì del mese
+        run: |
+          DAY=$(date +%d)
+          if [ "$DAY" -gt 7 ]; then
+            echo "Oggi è il giorno $DAY del mese. Non è il primo martedì. Annullamento."
+            exit 0
+          fi
+          echo "Confermato: è il primo martedì del mese."
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
